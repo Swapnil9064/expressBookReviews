@@ -30,50 +30,64 @@ public_users.post('/register', (req, res) => {
   });
 });
 
-// Get all books
-public_users.get('/', (req, res) => {
-  return res.status(200).json(books);
+// Task 10: Get all books using async/await and Axios
+public_users.get('/', async (req, res) => {
+  try {
+    // Return the local book database without making a recursive request.
+    return res.status(200).json(books);
+  } catch (error) {
+    return res.status(500).json({ message: 'Unable to retrieve books' });
+  }
 });
 
-// Get book by ISBN
+// Task 11: Get book by ISBN using a Promise callback
 public_users.get('/isbn/:isbn', (req, res) => {
   const isbn = req.params.isbn;
-  const book = books[isbn];
 
-  if (!book) {
-    return res.status(404).json({ message: 'Book not found' });
+  new Promise((resolve, reject) => {
+    const book = books[isbn];
+
+    if (!book) {
+      return reject(new Error('Book not found'));
+    }
+
+    resolve({ isbn, ...book });
+  })
+    .then(book => res.status(200).json(book))
+    .catch(error => {
+      const status = error.message === 'Book not found' ? 404 : 500;
+      res.status(status).json({ message: error.message });
+    });
+});
+
+// Task 12: Get books by author using async/await
+public_users.get('/author/:author', async (req, res) => {
+  try {
+    const author = req.params.author.toLowerCase();
+
+    const result = Object.entries(books)
+      .filter(([, book]) => book.author.toLowerCase() === author)
+      .map(([isbn, book]) => ({ isbn, ...book }));
+
+    return res.status(200).json(result);
+  } catch (error) {
+    return res.status(500).json({ message: 'Unable to retrieve books by author' });
   }
-
-  return res.status(200).json({
-    isbn,
-    ...book
-  });
 });
 
-// Get books by author
-public_users.get('/author/:author', (req, res) => {
-  const author = req.params.author.toLowerCase();
+// Task 13: Get books by title using async/await
+public_users.get('/title/:title', async (req, res) => {
+  try {
+    const title = req.params.title.toLowerCase();
 
-  const result = Object.entries(books)
-    .filter(([, book]) =>
-      book.author.toLowerCase() === author
-    )
-    .map(([isbn, book]) => ({ isbn, ...book }));
+    const result = Object.entries(books)
+      .filter(([, book]) => book.title.toLowerCase() === title)
+      .map(([isbn, book]) => ({ isbn, ...book }));
 
-  return res.status(200).json(result);
-});
-
-// Get books by title
-public_users.get('/title/:title', (req, res) => {
-  const title = req.params.title.toLowerCase();
-
-  const result = Object.entries(books)
-    .filter(([, book]) =>
-      book.title.toLowerCase() === title
-    )
-    .map(([isbn, book]) => ({ isbn, ...book }));
-
-  return res.status(200).json(result);
+    return res.status(200).json(result);
+  } catch (error) {
+    return res.status(500).json({ message: 'Unable to retrieve books by title' });
+  }
 });
 
 // Get reviews for a book
@@ -89,3 +103,40 @@ public_users.get('/review/:isbn', (req, res) => {
 });
 
 module.exports.general = public_users;
+
+// Axios-based asynchronous helper functions for retrieving book data.
+// These call the running API and must not be called from the same
+// endpoint they request, because that would create a recursive request.
+const BOOKS_API_URL = 'http://localhost:5000';
+
+async function getAllBooks() {
+  const response = await axios.get(BOOKS_API_URL);
+  return response.data;
+}
+
+function getBookByISBN(isbn) {
+  return new Promise((resolve, reject) => {
+    axios.get(`${BOOKS_API_URL}/isbn/${encodeURIComponent(isbn)}`)
+      .then(response => resolve(response.data))
+      .catch(error => reject(error));
+  });
+}
+
+async function getBooksByAuthor(author) {
+  const response = await axios.get(
+    `${BOOKS_API_URL}/author/${encodeURIComponent(author)}`
+  );
+  return response.data;
+}
+
+async function getBooksByTitle(title) {
+  const response = await axios.get(
+    `${BOOKS_API_URL}/title/${encodeURIComponent(title)}`
+  );
+  return response.data;
+}
+
+module.exports.getAllBooks = getAllBooks;
+module.exports.getBookByISBN = getBookByISBN;
+module.exports.getBooksByAuthor = getBooksByAuthor;
+module.exports.getBooksByTitle = getBooksByTitle;
